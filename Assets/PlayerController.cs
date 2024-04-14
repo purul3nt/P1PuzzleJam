@@ -10,6 +10,7 @@ public class PlayerController : MonoBehaviour
     public LayerMask groundLayer;
     public LayerMask interactableLayer;
     public LayerMask ladderLayer;
+    public Camera mainCamera; // Reference to the main camera
 
     private Rigidbody rb;
     private bool isGrounded;
@@ -52,12 +53,21 @@ public class PlayerController : MonoBehaviour
 
     private void ProcessInputs()
     {
-        movement = new Vector3(Input.GetAxis("Horizontal"), 0, Input.GetAxis("Vertical"));
+        // Calculate the direction relative to the camera's rotation
+        Vector3 forward = mainCamera.transform.forward;
+        Vector3 right = mainCamera.transform.right;
+        forward.y = 0;
+        right.y = 0;
+        forward.Normalize();
+        right.Normalize();
+
+        // Use camera relative directions to move the player
+        movement = (forward * Input.GetAxis("Vertical") + right * Input.GetAxis("Horizontal")).normalized;
+
         if (movement.magnitude > 0.1f)
         {
             if (currentState != State.Climbing)
                 currentState = State.Walking;
-            movement.Normalize();
         }
         else if (currentState != State.Climbing)
         {
@@ -69,7 +79,7 @@ public class PlayerController : MonoBehaviour
             currentState = State.Jumping;
         }
 
-        if (Input.GetKeyDown(KeyCode.E))
+        if (Input.GetKeyDown(KeyCode.F))
         {
             if (currentState == State.Climbing)
             {
@@ -80,11 +90,6 @@ public class PlayerController : MonoBehaviour
                 currentState = State.Interacting;
             }
         }
-
-        if (currentState == State.Climbing && Mathf.Abs(Input.GetAxis("Vertical")) > 0)
-        {
-            transform.Translate(Vector3.up * Input.GetAxis("Vertical") * climbSpeed * Time.deltaTime);
-        }
     }
 
     private void CheckGroundStatus()
@@ -92,13 +97,20 @@ public class PlayerController : MonoBehaviour
         isGrounded = Physics.CheckSphere(groundCheck.position, groundCheckRadius, groundLayer);
     }
 
-    private void HandleIdleState() { }
-    private void HandleWalkingState()
+    private void HandleIdleState() 
     {
+        rb.useGravity = true; // enable gravity while not climbing
+                              //
+     }
+
+        private void HandleWalkingState()
+    {
+        // Rotate the player to face the movement direction
         Quaternion targetRotation = Quaternion.LookRotation(movement);
         transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * 10);
         transform.Translate(movement * moveSpeed * Time.deltaTime, Space.World);
     }
+
     private void HandleJumpingState()
     {
         if (isGrounded)
@@ -107,6 +119,7 @@ public class PlayerController : MonoBehaviour
             currentState = State.Idle;
         }
     }
+
     private void HandleInteractingState()
     {
         // Detect and interact with ladder
@@ -119,15 +132,13 @@ public class PlayerController : MonoBehaviour
         else
         {
             currentState = State.Idle; // No ladder found, return to idle
-        }
+            rb.useGravity = true; // enable gravity while not climbing
+        }   
     }
+
     private void HandleClimbingState()
     {
-        // Add logic to climb up or down the ladder
         rb.velocity = new Vector3(0, Input.GetAxis("Vertical") * climbSpeed, 0);
-        Debug.Log("climbing");
-        // Optional: Check if at the top or bottom of the ladder to exit climbing state
-        // This could involve raycasting or checking transform.position against the ladder's top/bottom position
     }
 
     void OnDrawGizmos()
